@@ -5,7 +5,7 @@ mod config;
 use mcp::McpClient;
 use database::Database;
 use config::{Config, load_config, save_config};
-use tauri::{command, State, Manager};
+use tauri::{State, Manager};
 use std::sync::Mutex;
 
 struct AppState {
@@ -26,7 +26,12 @@ async fn initialize_mcp(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let base_url = "https://api.anthropic.com".to_string();
-    let model = "claude-3-opus-20240229".to_string();
+    
+    // 設定から現在のモデルを取得
+    let model = {
+        let config = state.config.lock().unwrap();
+        config.model.clone()
+    };
     
     let mcp_client = McpClient::new(api_key, base_url, model);
     
@@ -38,16 +43,9 @@ async fn initialize_mcp(
 #[tauri::command]
 async fn send_message(
     content: String,
+    session_id: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    // メッセージを作成
-    let messages = vec![
-        mcp::Message {
-            role: "user".to_string(),
-            content: content.clone(),
-        },
-    ];
-    
     // 非同期処理を実行する前に、クライアントが初期化されているか確認
     {
         let guard = state.mcp_client.lock().unwrap();
@@ -56,7 +54,31 @@ async fn send_message(
         }
     }
     
-    // 完全に別の方法で実装
+    // 現在のセッションの過去のメッセージを取得
+    let mut messages = Vec::new();
+    {
+        let database_guard = state.database.lock().unwrap();
+        let database = database_guard.as_ref().ok_or("Database not initialized")?;
+        
+        // 過去のメッセージを取得（最大10件）
+        let past_messages = database.get_messages(&session_id)
+            .map_err(|e| e.to_string())?;
+        
+        // 過去のメッセージをMCP形式に変換
+        for msg in past_messages.iter().rev().take(10).rev() {
+            messages.push(mcp::Message {
+                role: msg.role.clone(),
+                content: msg.content.clone(),
+            });
+        }
+    }
+    
+    // 新しいユーザーメッセージを追加
+    messages.push(mcp::Message {
+        role: "user".to_string(),
+        content: content.clone(),
+    });
+    
     // 各メッセージを個別に処理する関数を作成
     let response = process_message_with_mcp(&state, messages).await?;
     
@@ -124,6 +146,15 @@ fn add_chat_message(session_id: String, role: String, content: String, state: St
 }
 
 #[tauri::command]
+fn delete_chat_session(session_id: String, state: State<'_, AppState>) -> Result<(), String> {
+    let mut database_guard = state.database.lock().unwrap();
+    let database = database_guard.as_mut().ok_or("Database not initialized")?;
+    
+    database.delete_session(&session_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_config(state: State<'_, AppState>) -> Result<Config, String> {
     let config = state.config.lock().unwrap().clone();
     Ok(config)
@@ -172,6 +203,7 @@ pub fn run() {
             get_chat_sessions,
             get_chat_messages,
             add_chat_message,
+            delete_chat_session,
             get_config,
             save_config_command,
         ])

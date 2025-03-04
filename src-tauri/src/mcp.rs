@@ -1,6 +1,8 @@
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::time::Duration;
+use tokio::time::sleep;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
@@ -61,34 +63,14 @@ impl McpClient {
     pub async fn send_message(
         &self,
         messages: Vec<Message>,
-    ) -> Result<String, Box<dyn Error>> {
-        let request = ChatRequest {
-            model: self.model.clone(),
-            messages,
-            max_tokens: Some(2000),
-            temperature: Some(0.7),
-        };
-
-        let response = self
-            .client
-            .post(&format!("{}/v1/chat/completions", self.base_url))
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&request)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let error_text = response.text().await?;
-            return Err(format!("API error: {}", error_text).into());
-        }
-
-        let chat_response: ChatResponse = response.json().await?;
-        if let Some(choice) = chat_response.choices.first() {
-            Ok(choice.message.content.clone())
-        } else {
-            Err("No response from model".into())
-        }
+    ) -> Result<String, Box<dyn Error + Send + Sync>> {
+        // 静的メソッドを利用して実装を共有
+        Self::send_message_static(
+            self.api_key.clone(),
+            self.base_url.clone(),
+            self.model.clone(),
+            messages
+        ).await
     }
     
     // 静的メソッドを追加して、MutexGuardの問題を回避
@@ -97,7 +79,7 @@ impl McpClient {
         base_url: String,
         model: String,
         messages: Vec<Message>,
-    ) -> Result<String, Box<dyn Error>> {
+    ) -> Result<String, Box<dyn Error + Send + Sync>> {
         let client = Client::new();
         let request = ChatRequest {
             model,
@@ -106,24 +88,72 @@ impl McpClient {
             temperature: Some(0.7),
         };
 
+        // リトライ設定
+        let max_retries = 3;
+        let mut retry_count = 0;
+        let mut last_error = None;
+
+        while retry_count < max_retries {
+            match Self::try_send_request(&client, &base_url, &api_key, &request).await {
+                Ok(content) => return Ok(content),
+                Err(e) => {
+                    // エラーを保存
+                    last_error = Some(e.to_string());
+                    
+                    // 一時的なエラーの場合のみリトライ
+                    if retry_count < max_retries - 1 {
+                        // 指数バックオフ（1秒、2秒、4秒...）
+                        let backoff_duration = Duration::from_secs(2u64.pow(retry_count as u32));
+                        sleep(backoff_duration).await;
+                        retry_count += 1;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // すべてのリトライが失敗した場合
+        Err(format!("Failed after {} retries. Last error: {}",
+            max_retries, last_error.unwrap_or_else(|| "Unknown error".to_string())).into())
+    }
+    
+    // リクエスト送信を試行する内部メソッド
+    async fn try_send_request(
+        client: &Client,
+        base_url: &str,
+        api_key: &str,
+        request: &ChatRequest,
+    ) -> Result<String, Box<dyn Error + Send + Sync>> {
         let response = client
             .post(&format!("{}/v1/chat/completions", base_url))
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
-            .json(&request)
+            .json(request)
             .send()
             .await?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await?;
-            return Err(format!("API error: {}", error_text).into());
+            
+            // ステータスコードに基づいてエラーメッセージをカスタマイズ
+            let error_message = match status {
+                StatusCode::UNAUTHORIZED => format!("認証エラー: APIキーが無効です。 ({})", error_text),
+                StatusCode::TOO_MANY_REQUESTS => format!("レート制限エラー: リクエストが多すぎます。 ({})", error_text),
+                StatusCode::BAD_REQUEST => format!("リクエストエラー: リクエストの形式が正しくありません。 ({})", error_text),
+                StatusCode::INTERNAL_SERVER_ERROR => format!("サーバーエラー: APIサーバーで問題が発生しました。 ({})", error_text),
+                _ => format!("API エラー ({}): {}", status.as_u16(), error_text),
+            };
+            
+            return Err(error_message.into());
         }
 
         let chat_response: ChatResponse = response.json().await?;
         if let Some(choice) = chat_response.choices.first() {
             Ok(choice.message.content.clone())
         } else {
-            Err("No response from model".into())
+            Err("モデルからの応答がありません".into())
         }
     }
 }

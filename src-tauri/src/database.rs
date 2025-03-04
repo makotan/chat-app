@@ -111,7 +111,7 @@ impl Database {
     
     pub fn get_messages(&self, session_id: &str) -> Result<Vec<Message>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, session_id, role, content, timestamp FROM messages 
+            "SELECT id, session_id, role, content, timestamp FROM messages
              WHERE session_id = ? ORDER BY timestamp ASC"
         )?;
         
@@ -127,5 +127,27 @@ impl Database {
         .collect::<Result<Vec<_>>>()?;
         
         Ok(messages)
+    }
+    
+    pub fn delete_session(&mut self, session_id: &str) -> Result<()> {
+        // トランザクションを開始
+        let tx = self.conn.transaction()?;
+        
+        // まず関連するメッセージを削除
+        tx.execute(
+            "DELETE FROM messages WHERE session_id = ?",
+            params![session_id],
+        )?;
+        
+        // 次にセッション自体を削除
+        tx.execute(
+            "DELETE FROM chat_sessions WHERE id = ?",
+            params![session_id],
+        )?;
+        
+        // トランザクションをコミット
+        tx.commit()?;
+        
+        Ok(())
     }
 }
