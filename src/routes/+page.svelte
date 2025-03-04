@@ -74,7 +74,7 @@
       }];
       
       // Claudeに送信
-      const response = await sendMessage(content);
+      const response = await sendMessage(content, currentSessionId);
       
       // アシスタントの応答をデータベースに保存
       await addChatMessage(currentSessionId, 'assistant', response);
@@ -114,16 +114,7 @@
 </div>
 
 <style>
-  :global(body, html) {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  }
-  
-  :global(#app) {
-    height: 100vh;
-  }
+  /* グローバルスタイルは+layout.svelteに移動 */
   
   .app-container {
     display: flex;
@@ -147,9 +138,9 @@
   
   .loading {
     text-align: center;
-    color: #757575;
+    color: var(--text-color, #757575);
+    opacity: 0.7;
     font-style: italic;
     margin: 1rem 0;
   }
-
 </style>

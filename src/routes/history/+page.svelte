@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { chatStore } from '$lib/stores/chat';
-  import { getChatSessions } from '$lib/api';
+  import { getChatSessions, deleteChatSession } from '$lib/api';
   import type { ChatSession } from '$lib/types';
   
   let sessions: ChatSession[] = [];
   let isLoading = true;
+  let isDeleting = false;
   
   onMount(async () => {
     try {
@@ -33,6 +34,41 @@
     }));
     window.location.href = '/';
   }
+  
+  async function handleDelete(sessionId: string, event: MouseEvent) {
+    // イベントの伝播を停止（親要素のクリックイベントが発火しないように）
+    event.stopPropagation();
+    
+    if (isDeleting) return;
+    
+    // 確認ダイアログ
+    if (!confirm('このチャットセッションを削除してもよろしいですか？この操作は元に戻せません。')) {
+      return;
+    }
+    
+    isDeleting = true;
+    
+    try {
+      // セッションを削除
+      await deleteChatSession(sessionId);
+      
+      // セッションリストから削除
+      sessions = sessions.filter(session => session.id !== sessionId);
+      
+      // chatStoreを更新
+      chatStore.update(state => ({
+        ...state,
+        sessions,
+        // 削除したセッションが現在選択されていた場合、選択を解除
+        currentSessionId: state.currentSessionId === sessionId ? '' : state.currentSessionId
+      }));
+    } catch (error) {
+      console.error('Failed to delete chat session:', error);
+      alert('セッションの削除に失敗しました');
+    } finally {
+      isDeleting = false;
+    }
+  }
 </script>
 
 <div class="history-container">
@@ -59,8 +95,9 @@
               <td>{session.title}</td>
               <td>{formatDate(session.createdAt)}</td>
               <td>{formatDate(session.updatedAt)}</td>
-              <td>
-                <button on:click={() => openChat(session.id)}>開く</button>
+              <td class="actions">
+                <button class="open-btn" on:click={() => openChat(session.id)}>開く</button>
+                <button class="delete-btn" on:click={(e) => handleDelete(session.id, e)}>削除</button>
               </td>
             </tr>
           {/each}
@@ -115,13 +152,25 @@
     background-color: #f9f9f9;
   }
   
+  .actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+  
   button {
     padding: 0.25rem 0.5rem;
-    background-color: #2196f3;
     color: white;
     border: none;
     border-radius: 0.25rem;
     cursor: pointer;
+  }
+  
+  .open-btn {
+    background-color: #2196f3;
+  }
+  
+  .delete-btn {
+    background-color: #f44336;
   }
   
   .back-link {

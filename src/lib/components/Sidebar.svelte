@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { chatStore } from '$lib/stores/chat';
-  import { getChatSessions } from '$lib/api';
+  import { getChatSessions, createChatSession } from '$lib/api';
   import type { ChatSession } from '$lib/types';
   
   let sessions: ChatSession[] = [];
@@ -25,8 +25,38 @@
     }));
   }
   
-  function createNewChat() {
-    // 新しいチャットセッションを作成する処理は後で実装
+  async function createNewChat() {
+    try {
+      // 現在の日時を含むタイトルを作成
+      const now = new Date();
+      const title = `新しいチャット (${now.toLocaleString()})`;
+      
+      // バックエンドでセッションを作成
+      const sessionId = await createChatSession(title);
+      
+      // 新しいセッションオブジェクトを作成
+      const newSession: ChatSession = {
+        id: sessionId,
+        title: title,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      };
+      
+      // セッションリストに追加
+      sessions = [newSession, ...sessions];
+      
+      // chatStoreを更新
+      chatStore.update(state => ({
+        ...state,
+        sessions,
+        currentSessionId: sessionId
+      }));
+      
+      // 新しいセッションを選択
+      selectSession(sessionId);
+    } catch (error) {
+      console.error('Failed to create new chat session:', error);
+    }
   }
 </script>
 
@@ -64,13 +94,13 @@
     flex-direction: column;
     width: 250px;
     height: 100%;
-    background-color: #f5f5f5;
-    border-right: 1px solid #ddd;
+    background-color: var(--sidebar-bg, #f5f5f5);
+    border-right: 1px solid var(--sidebar-border, #ddd);
   }
   
   .header {
     padding: 1rem;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--sidebar-border, #ddd);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -83,7 +113,7 @@
   
   .header button {
     padding: 0.25rem 0.5rem;
-    background-color: #2196f3;
+    background-color: var(--button-primary, #2196f3);
     color: white;
     border: none;
     border-radius: 0.25rem;
@@ -106,11 +136,11 @@
   }
   
   .session:hover {
-    background-color: #e0e0e0;
+    background-color: var(--hover-bg, #e0e0e0);
   }
   
   .session.active {
-    background-color: #e3f2fd;
+    background-color: var(--active-bg, #e3f2fd);
   }
   
   .title {
@@ -120,24 +150,26 @@
   
   .date {
     font-size: 0.8rem;
-    color: #757575;
+    color: var(--text-color, #757575);
+    opacity: 0.7;
   }
   
   .empty {
     padding: 1rem;
     text-align: center;
-    color: #757575;
+    color: var(--text-color, #757575);
+    opacity: 0.7;
     font-style: italic;
   }
   
   .footer {
     padding: 1rem;
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--sidebar-border, #ddd);
     text-align: center;
   }
   
   .footer a {
-    color: #2196f3;
+    color: var(--button-primary, #2196f3);
     text-decoration: none;
   }
   

@@ -35,22 +35,24 @@
   .chat-input {
     display: flex;
     padding: 1rem;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--divider, #eee);
   }
   
   textarea {
     flex: 1;
     padding: 0.5rem;
-    border: 1px solid #ddd;
+    border: 1px solid var(--input-border, #ddd);
     border-radius: 0.25rem;
     margin-right: 0.5rem;
     resize: none;
     height: 60px;
+    background-color: var(--bg-color, #ffffff);
+    color: var(--text-color, #333333);
   }
   
   button {
     padding: 0.5rem 1rem;
-    background-color: #2196f3;
+    background-color: var(--button-primary, #2196f3);
     color: white;
     border: none;
     border-radius: 0.25rem;
@@ -59,7 +61,8 @@
   }
   
   button:disabled {
-    background-color: #bdbdbd;
+    background-color: var(--hover-bg, #bdbdbd);
+    opacity: 0.6;
     cursor: not-allowed;
   }
 </style>

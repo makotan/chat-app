@@ -18,13 +18,13 @@
   
   .user {
     align-self: flex-end;
-    background-color: #e3f2fd;
+    background-color: var(--message-user-bg, #e3f2fd);
     margin-left: auto;
   }
   
   .assistant {
     align-self: flex-start;
-    background-color: #f5f5f5;
+    background-color: var(--message-assistant-bg, #f5f5f5);
   }
   
   .content {

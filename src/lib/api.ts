@@ -6,8 +6,8 @@ export async function initializeMcp(apiKey: string): Promise<string> {
   return invoke('initialize_mcp', { apiKey });
 }
 
-export async function sendMessage(content: string): Promise<string> {
-  return invoke('send_message', { content });
+export async function sendMessage(content: string, sessionId: string): Promise<string> {
+  return invoke('send_message', { content, sessionId });
 }
 
 // データベース関連
@@ -29,6 +29,10 @@ export async function addChatMessage(
   content: string
 ): Promise<string> {
   return invoke('add_chat_message', { sessionId, role, content });
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  return invoke('delete_chat_session', { sessionId });
 }
 
 // 設定関連
