@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { chatStore } from '$lib/stores/chat';
-  import { getChatSessions, deleteChatSession } from '$lib/api';
+  import { getChatSessions, deleteChatSession, exportChatHistory, importChatHistory } from '$lib/api';
   import type { ChatSession } from '$lib/types';
   
   let sessions: ChatSession[] = [];
   let isLoading = true;
   let isDeleting = false;
+  let isExporting = false;
+  let isImporting = false;
+  let statusMessage = '';
   
   onMount(async () => {
     try {
@@ -69,10 +72,80 @@
       isDeleting = false;
     }
   }
+
+  // チャット履歴をエクスポートする関数
+  async function handleExport() {
+    if (isExporting) return;
+    
+    isExporting = true;
+    statusMessage = 'エクスポート中...';
+    
+    try {
+      const result = await exportChatHistory();
+      statusMessage = result;
+      
+      // 成功メッセージを3秒後に消す
+      setTimeout(() => {
+        if (statusMessage === result) {
+          statusMessage = '';
+        }
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to export chat history:', error);
+      statusMessage = `エクスポートに失敗しました: ${error}`;
+    } finally {
+      isExporting = false;
+    }
+  }
+  
+  // チャット履歴をインポートする関数
+  async function handleImport() {
+    if (isImporting) return;
+    
+    isImporting = true;
+    statusMessage = 'インポート中...';
+    
+    try {
+      const result = await importChatHistory();
+      statusMessage = result;
+      
+      // セッションリストを更新
+      sessions = await getChatSessions();
+      chatStore.update(state => ({
+        ...state,
+        sessions
+      }));
+      
+      // 成功メッセージを3秒後に消す
+      setTimeout(() => {
+        if (statusMessage === result) {
+          statusMessage = '';
+        }
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to import chat history:', error);
+      statusMessage = `インポートに失敗しました: ${error}`;
+    } finally {
+      isImporting = false;
+    }
+  }
 </script>
 
 <div class="history-container">
   <h1>チャット履歴</h1>
+  
+  <div class="actions-bar">
+    <button class="export-btn" on:click={handleExport} disabled={isExporting || isImporting}>
+      {isExporting ? 'エクスポート中...' : 'エクスポート'}
+    </button>
+    <button class="import-btn" on:click={handleImport} disabled={isExporting || isImporting}>
+      {isImporting ? 'インポート中...' : 'インポート'}
+    </button>
+  </div>
+  
+  {#if statusMessage}
+    <div class="status-message">{statusMessage}</div>
+  {/if}
   
   {#if isLoading}
     <div class="loading">読み込み中...</div>
@@ -184,5 +257,32 @@
   
   .back-link a:hover {
     text-decoration: underline;
+  }
+  
+  .actions-bar {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .export-btn, .import-btn {
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+  }
+  
+  .export-btn {
+    background-color: #4caf50;
+  }
+  
+  .import-btn {
+    background-color: #ff9800;
+  }
+  
+  .status-message {
+    margin-bottom: 1.5rem;
+    padding: 0.75rem;
+    background-color: #e3f2fd;
+    border-radius: 0.25rem;
+    border-left: 4px solid #2196f3;
   }
 </style>

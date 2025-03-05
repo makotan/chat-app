@@ -8,7 +8,8 @@
     apiKey: '',
     model: 'claude-3-opus-20240229',
     theme: 'light',
-    maxHistory: 100
+    maxHistory: 100,
+    autoCreateChat: true
   };
   
   let isSaving = false;
@@ -76,7 +77,6 @@
         <option value="dark">ダーク</option>
       </select>
     </div>
-    
     <div class="form-group">
       <label for="maxHistory">履歴の最大保存数</label>
       <input
@@ -86,6 +86,18 @@
         min="10"
         max="1000"
       />
+    </div>
+    
+    <div class="form-group">
+      <label for="autoCreateChat">新規チャットの自動作成</label>
+      <div class="checkbox-container">
+        <input
+          type="checkbox"
+          id="autoCreateChat"
+          bind:checked={config.autoCreateChat}
+        />
+        <span class="checkbox-label">アプリ起動時に新規チャットを自動作成する</span>
+      </div>
     </div>
     
     <button type="submit" disabled={isSaving}>
@@ -162,5 +174,19 @@
   
   .back-link a:hover {
     text-decoration: underline;
+  }
+  
+  .checkbox-container {
+    display: flex;
+    align-items: center;
+  }
+  
+  .checkbox-container input[type="checkbox"] {
+    width: auto;
+    margin-right: 0.5rem;
+  }
+  
+  .checkbox-label {
+    font-size: 0.9rem;
   }
 </style>

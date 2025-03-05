@@ -43,3 +43,12 @@ export async function getConfig(): Promise<Config> {
 export async function saveConfig(config: Config): Promise<void> {
   return invoke('save_config_command', { config });
 }
+
+// エクスポート/インポート関連
+export async function exportChatHistory(): Promise<string> {
+  return invoke('export_chat_history');
+}
+
+export async function importChatHistory(): Promise<string> {
+  return invoke('import_chat_history');
+}

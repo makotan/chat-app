@@ -23,12 +23,12 @@
         await initializeMcp(config.apiKey);
       }
       
-      // 最新のセッションを取得するか、新しいセッションを作成
+      // 最新のセッションを取得するか、設定に基づいて新しいセッションを作成
       currentSessionId = $chatStore.currentSessionId;
       if (currentSessionId) {
         messages = await getChatMessages(currentSessionId);
-      } else {
-        // 新しいセッションを作成
+      } else if (config.autoCreateChat) {
+        // 設定で自動作成が有効な場合のみ、新しいセッションを作成
         currentSessionId = await createChatSession('新しいチャット');
         chatStore.update(state => ({
           ...state,

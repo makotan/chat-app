@@ -4,22 +4,36 @@ use std::path::PathBuf;
 use tauri::Manager;
 use uuid::Uuid;
 use chrono::Utc;
+use std::fs;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChatSession {
     pub id: String,
     pub title: String,
+    #[serde(rename = "createdAt")]
     pub created_at: String,
+    #[serde(rename = "updatedAt")]
     pub updated_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message {
     pub id: String,
+    #[serde(rename = "sessionId")]
     pub session_id: String,
     pub role: String,
     pub content: String,
     pub timestamp: String,
+}
+
+// エクスポート/インポート用のデータ構造
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExportData {
+    pub sessions: Vec<ChatSession>,
+    pub messages: Vec<Message>,
+    pub version: String,
+    #[serde(rename = "exportedAt")]
+    pub exported_at: String,
 }
 
 pub struct Database {
@@ -59,6 +73,75 @@ impl Database {
         )?;
         
         Ok(Self { conn })
+    }
+
+    // チャット履歴をエクスポートする関数
+    pub fn export_data(&self, file_path: &str) -> std::result::Result<(), String> {
+        // すべてのセッションを取得
+        let sessions = self.get_sessions()
+            .map_err(|e| format!("Failed to get sessions: {}", e))?;
+        
+        // すべてのメッセージを取得
+        let mut all_messages = Vec::new();
+        for session in &sessions {
+            let messages = self.get_messages(&session.id)
+                .map_err(|e| format!("Failed to get messages for session {}: {}", session.id, e))?;
+            all_messages.extend(messages);
+        }
+        
+        // エクスポートデータを作成
+        let export_data = ExportData {
+            sessions,
+            messages: all_messages,
+            version: "1.0".to_string(),
+            exported_at: Utc::now().to_rfc3339(),
+        };
+        
+        // JSONに変換
+        let json = serde_json::to_string_pretty(&export_data)
+            .map_err(|e| format!("Failed to serialize data: {}", e))?;
+        
+        // ファイルに書き込み
+        fs::write(file_path, json)
+            .map_err(|e| format!("Failed to write file: {}", e))?;
+        
+        Ok(())
+    }
+    
+    // チャット履歴をインポートする関数
+    pub fn import_data(&mut self, file_path: &str) -> std::result::Result<(), String> {
+        // ファイルを読み込み
+        let json = fs::read_to_string(file_path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        
+        // JSONをパース
+        let import_data: ExportData = serde_json::from_str(&json)
+            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+        
+        // トランザクションを開始
+        let tx = self.conn.transaction()
+            .map_err(|e| format!("Failed to start transaction: {}", e))?;
+        
+        // セッションをインポート
+        for session in &import_data.sessions {
+            tx.execute(
+                "INSERT OR REPLACE INTO chat_sessions (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                params![session.id, session.title, session.created_at, session.updated_at],
+            ).map_err(|e| format!("Failed to insert session: {}", e))?;
+        }
+        
+        // メッセージをインポート
+        for message in &import_data.messages {
+            tx.execute(
+                "INSERT OR REPLACE INTO messages (id, session_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)",
+                params![message.id, message.session_id, message.role, message.content, message.timestamp],
+            ).map_err(|e| format!("Failed to insert message: {}", e))?;
+        }
+        
+        // トランザクションをコミット
+        tx.commit().map_err(|e| format!("Failed to commit transaction: {}", e))?;
+        
+        Ok(())
     }
     
     pub fn create_session(&self, title: &str) -> Result<String> {

@@ -1,9 +1,70 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { settingsStore } from '$lib/stores/settings';
-  import { getConfig } from '$lib/api';
+  import { getConfig, exportChatHistory, importChatHistory } from '$lib/api';
+  import { goto } from '$app/navigation';
+  import ShortcutHelp from '$lib/components/ShortcutHelp.svelte';
   
   let theme = 'light';
+  let showShortcutHelp = false;
+  
+  // ショートカットキーのハンドラー
+  function handleKeydown(event: KeyboardEvent) {
+    // Ctrl/Cmd + キーの組み合わせを検出
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modifier = isMac ? event.metaKey : event.ctrlKey;
+    
+    if (modifier) {
+      switch (event.key) {
+        case 'n': // 新規チャット
+          event.preventDefault();
+          goto('/');
+          break;
+        case 'h': // 履歴
+          event.preventDefault();
+          goto('/history');
+          break;
+        case 's': // 設定
+          event.preventDefault();
+          goto('/settings');
+          break;
+        case 'e': // エクスポート
+          event.preventDefault();
+          handleExport();
+          break;
+        case 'i': // インポート
+          event.preventDefault();
+          handleImport();
+          break;
+        case '?': // ショートカットヘルプ
+          event.preventDefault();
+          showShortcutHelp = !showShortcutHelp;
+          break;
+      }
+    }
+  }
+  
+  // チャット履歴をエクスポートする関数
+  async function handleExport() {
+    try {
+      const result = await exportChatHistory();
+      alert(result);
+    } catch (error) {
+      console.error('Failed to export chat history:', error);
+      alert(`エクスポートに失敗しました: ${error}`);
+    }
+  }
+  
+  // チャット履歴をインポートする関数
+  async function handleImport() {
+    try {
+      const result = await importChatHistory();
+      alert(result);
+    } catch (error) {
+      console.error('Failed to import chat history:', error);
+      alert(`インポートに失敗しました: ${error}`);
+    }
+  }
   
   // 設定からテーマを読み込む
   onMount(async () => {
@@ -14,6 +75,14 @@
     } catch (error) {
       console.error('Failed to load config:', error);
     }
+    
+    // グローバルなキーボードイベントリスナーを追加
+    window.addEventListener('keydown', handleKeydown);
+    
+    // クリーンアップ関数を返す
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+    };
   });
   
   // settingsStoreの変更を監視
@@ -23,6 +92,7 @@
 <!-- テーマクラスをHTML要素に適用 -->
 <div class="app-container {theme}">
   <slot />
+  <ShortcutHelp bind:isOpen={showShortcutHelp} />
 </div>
 
 <style>

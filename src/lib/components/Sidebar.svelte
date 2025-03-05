@@ -84,6 +84,7 @@
   </div>
   
   <div class="footer">
+    <a href="/history">チャット履歴</a>
     <a href="/settings">設定</a>
   </div>
 </div>
@@ -165,12 +166,15 @@
   .footer {
     padding: 1rem;
     border-top: 1px solid var(--sidebar-border, #ddd);
-    text-align: center;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
   }
   
   .footer a {
     color: var(--button-primary, #2196f3);
     text-decoration: none;
+    padding: 0.25rem 0.5rem;
   }
   
   .footer a:hover {

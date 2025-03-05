@@ -9,6 +9,7 @@ pub struct Config {
     pub model: String,
     pub theme: String,
     pub max_history: usize,
+    pub auto_create_chat: bool,
 }
 
 impl Default for Config {
@@ -18,6 +19,7 @@ impl Default for Config {
             model: "claude-3-opus-20240229".to_string(),
             theme: "light".to_string(),
             max_history: 100,
+            auto_create_chat: true, // デフォルトでは自動作成を有効にする
         }
     }
 }

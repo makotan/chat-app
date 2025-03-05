@@ -7,6 +7,7 @@ use database::Database;
 use config::{Config, load_config, save_config};
 use tauri::{State, Manager};
 use std::sync::Mutex;
+use tauri_plugin_dialog::DialogExt;
 
 struct AppState {
     mcp_client: Mutex<Option<McpClient>>,
@@ -166,10 +167,82 @@ fn save_config_command(config: Config, state: State<'_, AppState>, app_handle: t
     save_config(&app_handle, &config)
 }
 
+#[tauri::command]
+fn export_chat_history(state: State<'_, AppState>, app_handle: tauri::AppHandle) -> Result<String, String> {
+    // ファイル保存ダイアログを表示
+    let file_path = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let file_path_clone = file_path.clone();
+    
+    app_handle.dialog()
+        .file()
+        .add_filter("JSON", &["json"])
+        .save_file(move |path| {
+            if let Ok(mut guard) = file_path_clone.lock() {
+                *guard = path;
+            }
+        });
+    
+    // ダイアログの結果を待つための短い遅延
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    
+    // ファイルパスを取得
+    let path_option = file_path.lock().map_err(|e| format!("ミューテックスのロックに失敗しました: {}", e))?;
+    
+    // ファイルパスが選択されなかった場合
+    if path_option.is_none() {
+        return Err("エクスポートがキャンセルされました。".to_string());
+    }
+    
+    let file_path = path_option.as_ref().unwrap().to_string();
+    
+    // データベースからエクスポート
+    let database_guard = state.database.lock().unwrap();
+    let database = database_guard.as_ref().ok_or("データベースが初期化されていません")?;
+    
+    database.export_data(&file_path)
+        .map(|_| format!("チャット履歴を正常にエクスポートしました: {}", file_path))
+}
+#[tauri::command]
+fn import_chat_history(state: State<'_, AppState>, app_handle: tauri::AppHandle) -> Result<String, String> {
+    // ファイル選択ダイアログを表示
+    let file_path = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let file_path_clone = file_path.clone();
+    
+    app_handle.dialog()
+        .file()
+        .add_filter("JSON", &["json"])
+        .pick_file(move |path| {
+            if let Ok(mut guard) = file_path_clone.lock() {
+                *guard = path;
+            }
+        });
+    
+    // ダイアログの結果を待つための短い遅延
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    
+    // ファイルパスを取得
+    let path_option = file_path.lock().map_err(|e| format!("ミューテックスのロックに失敗しました: {}", e))?;
+    
+    // ファイルパスが選択されなかった場合
+    if path_option.is_none() {
+        return Err("インポートがキャンセルされました。".to_string());
+    }
+    
+    let file_path = path_option.as_ref().unwrap().to_string().to_string();
+    
+    // データベースにインポート
+    let mut database_guard = state.database.lock().unwrap();
+    let database = database_guard.as_mut().ok_or("データベースが初期化されていません")?;
+    
+    database.import_data(&file_path)
+        .map(|_| format!("チャット履歴を正常にインポートしました: {}", file_path))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             mcp_client: Mutex::new(None),
             database: Mutex::new(None),
@@ -206,6 +279,8 @@ pub fn run() {
             delete_chat_session,
             get_config,
             save_config_command,
+            export_chat_history,
+            import_chat_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

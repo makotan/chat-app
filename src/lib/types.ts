@@ -18,4 +18,12 @@ export interface Config {
   model: string;
   theme: 'light' | 'dark';
   maxHistory: number;
+  autoCreateChat: boolean; // 新規チャットの自動作成を制御
+}
+
+export interface ExportData {
+  sessions: ChatSession[];
+  messages: Message[];
+  version: string;
+  exportedAt: string;
 }
